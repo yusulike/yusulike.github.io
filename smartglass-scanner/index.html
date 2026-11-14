@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SmartGlass Scanner (스마트글래스 스캐너) — 온디바이스 스마트글래스 BLE 스캐너</title>
+  <meta
+    name="description"
+    content="위치 권한 없이(Android 12+) 주변 스마트글래스의 BLE 광고 신호를 기기 내부에서만 탐지하고, -55 dBm 초근접 Gate 스크리닝을 제공하는 Android 네이티브 앱."
+  />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --ground: #f5f6f3;
+      --bench: #eceee8;
+      --plate: #ffffff;
+      --ink: #14191e;
+      --muted: #475259;
+      --line: #d4d8cf;
+      --line-strong: #9ca598;
+      --emerald: #0b6e4f;
+      --emerald-tint: #e7f4ee;
+      --amber: #964a00;
+      --amber-tint: #fbf0df;
+      --red: #a6231a;
+      --red-tint: #fceceb;
+      --cobalt: #154c9b;
+      --sans: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--ground);
+      color: var(--ink);
+    }
+
+    body {
+      margin: 0;
+      background: var(--ground);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.65;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection {
+      background: var(--ink);
+      color: var(--ground);
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--cobalt);
+      outline-offset: 2px;
+    }
+
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: var(--ground); }
+    ::-webkit-scrollbar-thumb { background: #b9c0b5; border: 2px solid var(--ground); }
+
+    code, .mono {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    code {
+      font-size: 0.875em;
+      background: var(--bench);
+      border: 1px solid var(--line);
+      padding: 1px 5px;
+      color: var(--ink);
+    }
+
+    a { color: inherit; }
+
+    /* Bilingual toggle visibility */
+    html[data-lang="ko"] [data-copy="en"] { display: none; }
+    html[data-lang="en"] [data-copy="ko"] { display: none; }
+
+    /* Top utility bar */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: var(--ground);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar-inner {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 0 32px;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand-icon {
+      width: 28px;
+      height: 28px;
+      display: block;
+      flex-shrink: 0;
+      border: 1px solid var(--line-strong);
+    }
+
+    .nav-cluster {
+      display: flex;
+      align-items: center;
+      gap: 10px 22px;
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      padding: 6px 0;
+      border-bottom: 1px solid transparent;
+    }
+
+    .nav-links a:hover {
+      color: var(--ink);
+      border-bottom-color: var(--ink);
+    }
+
+    .lang-switch {
+      display: inline-flex;
+      border: 1px solid var(--ink);
+      background: var(--plate);
+    }
+
+    .lang-btn {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 11px;
+      cursor: pointer;
+    }
+
+    .lang-btn[aria-pressed="true"] {
+      background: var(--ink);
+      color: var(--ground);
+    }
+
+    /* Main first viewport bench */
+    .bench-wrap {
+      max-width: 1320px;
+      margin: 0 auto;
+      border-left: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      background: var(--plate);
+    }
+
+    .hero-bench {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero-copy,
+    .hero-lab,
+    .specimen-notes,
+    .mech-primary,
+    .mech-secondary,
+    .ledger-col,
+    .plate-meta {
+      min-width: 0;
+    }
+
+    .hero-copy {
+      padding: 36px 40px 32px;
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 28px;
+    }
+
+    .hero-copy h1 {
+      margin: 0;
+      font-size: clamp(30px, 3.5vw, 48px);
+      line-height: 1.18;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      max-width: 19ch;
+    }
+
+    html[data-lang="en"] .hero-copy h1 {
+      max-width: 19ch;
+    }
+
+    .hero-lead {
+      margin: 20px 0 0;
+      font-size: 17px;
+      line-height: 1.68;
+      color: var(--muted);
+      max-width: 56ch;
+    }
+
+    .hero-actions {
+      margin-top: 28px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .btn-solid {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--ink);
+      color: var(--ground);
+      padding: 13px 22px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+      border: 1px solid var(--ink);
+    }
+
+    .btn-solid:hover {
+      background: #273038;
+      border-color: #273038;
+    }
+
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      background: var(--plate);
+      color: var(--ink);
+      padding: 13px 20px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      border: 1px solid var(--line-strong);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--ink);
+      background: var(--ground);
+    }
+
+    /* Engineering verification ledger (replaces generic SaaS stat row) */
+    .spec-ledger {
+      width: 100%;
+      border-collapse: collapse;
+      border-top: 1px solid var(--line);
+      font-size: 14px;
+    }
+
+    .spec-ledger th,
+    .spec-ledger td {
+      padding: 11px 4px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .spec-ledger tr:last-child th,
+    .spec-ledger tr:last-child td {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .spec-ledger th {
+      width: 148px;
+      font-weight: 700;
+      color: var(--ink);
+      padding-right: 16px;
+    }
+
+    .spec-ledger td {
+      color: var(--muted);
+    }
+
+    .spec-ledger .val {
+      font-family: var(--mono);
+      color: var(--emerald);
+      font-weight: 600;
+      margin-right: 8px;
+    }
+
+    /* Right bench: Interactive BLE Signal Ruler + Specimen Fig. 01 */
+    .hero-lab {
+      background: var(--bench);
+      padding: 24px 32px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 18px;
+    }
+
+    .ruler-panel {
+      background: var(--plate);
+      border: 1px solid var(--line-strong);
+      padding: 16px 18px;
+    }
+
+    .ruler-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ruler-state-badge {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border: 1px solid currentColor;
+    }
+
+    .state-far { color: var(--emerald); background: var(--emerald-tint); }
+    .state-near { color: var(--amber); background: var(--amber-tint); }
+    .state-gate { color: var(--red); background: var(--red-tint); }
+
+    .scale-bar {
+      position: relative;
+      margin-top: 14px;
+      height: 22px;
+      border: 1px solid var(--ink);
+      display: grid;
+      grid-template-columns: 50% 8.3% 41.7%;
+      background: var(--plate);
+    }
+
+    /* Range -90 to -30 span = 60 dBm; -60 at 50%, -55 Gate trigger at 58.3% */
+    .seg-far { background: var(--emerald-tint); border-right: 1px dashed var(--line-strong); }
+    .seg-amber { background: var(--amber-tint); border-right: 2px solid var(--red); }
+    .seg-gate { background: var(--red-tint); }
+
+    .rssi-marker {
+      position: absolute;
+      top: -5px;
+      bottom: -5px;
+      width: 3px;
+      background: var(--ink);
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    .rssi-slider {
+      width: 100%;
+      margin-top: 12px;
+      accent-color: var(--ink);
+      cursor: pointer;
+    }
+
+    .scale-ticks {
+      position: relative;
+      height: 18px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .tick-start { position: absolute; left: 0; top: 0; }
+    .tick-gate {
+      position: absolute;
+      left: 58.33%;
+      top: 0;
+      transform: translateX(-50%);
+      color: var(--red);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .tick-end { position: absolute; right: 0; top: 0; }
+
+    .preset-row {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .preset-btn {
+      appearance: none;
+      border: 1px solid var(--line-strong);
+      background: var(--ground);
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 5px 9px;
+      cursor: pointer;
+    }
+
+    .preset-btn[aria-pressed="true"] {
+      background: var(--ink);
+      color: var(--ground);
+      border-color: var(--ink);
+    }
+
+    .sim-readout {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--ink);
+      min-height: 42px;
+    }
+
+    .hero-specimen {
+      display: grid;
+      grid-template-columns: 172px minmax(0, 1fr);
+      gap: 20px;
+      align-items: center;
+    }
+
+    .phone-plate {
+      background: var(--ink);
+      border-radius: 22px;
+      padding: 7px;
+      border: 1px solid #0c1013;
+      cursor: zoom-in;
+      text-align: left;
+    }
+
+    .phone-plate img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 16px;
+    }
+
+    .specimen-notes {
+      padding-bottom: 4px;
+    }
+
+    .fig-code {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--cobalt);
+      margin: 0 0 8px;
+    }
+
+    .specimen-notes h2 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .specimen-notes p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .zoom-hint {
+      display: inline-block;
+      margin-top: 10px;
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      border-bottom: 1px solid var(--line-strong);
+      background: none;
+      border-top: 0;
+      border-left: 0;
+      border-right: 0;
+      padding: 0 0 2px;
+      cursor: pointer;
+    }
+
+    /* Section scaffold — calibrated 1px compartments */
+    .section-block {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-head {
+      padding: 40px 44px 24px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .section-sub {
+      margin: 0;
+      font-size: 15px;
+      color: var(--muted);
+      max-width: 56ch;
+    }
+
+    /* Mechanism continuous band (no equal 2x2 numbered cards) */
+    .mechanism-track {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .mech-primary {
+      padding: 36px 44px;
+      border-right: 1px solid var(--line);
+    }
+
+    .mech-secondary {
+      padding: 36px 40px;
+      background: var(--ground);
+    }
+
+    .mech-primary h3,
+    .mech-secondary h3 {
+      margin: 0 0 12px;
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .mech-primary p,
+    .mech-secondary p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      max-width: 60ch;
+    }
+
+    .param-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-top: 1px solid var(--line);
+      border-left: 1px solid var(--line);
+    }
+
+    .param-cell {
+      padding: 12px 14px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background: var(--ground);
+    }
+
+    .param-cell dt {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .param-cell dd {
+      margin: 4px 0 0;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .gate-states {
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      background: var(--plate);
+      padding: 6px 14px;
+    }
+
+    .gate-row {
+      display: grid;
+      grid-template-columns: 88px 1fr;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+    }
+
+    .gate-row:last-child { border-bottom: 0; }
+
+    .gate-tag {
+      padding: 4px 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+      border: 1px solid currentColor;
+    }
+
+    .gate-desc { padding: 2px 0; color: var(--muted); }
+
+    .controls-limits {
+      display: grid;
+      grid-template-columns: 1fr 1.1fr;
+    }
+
+    .ledger-col {
+      padding: 36px 44px;
+      border-right: 1px solid var(--line);
+    }
+
+    .ledger-col:last-child {
+      border-right: 0;
+      background: var(--bench);
+    }
+
+    .ledger-col h3 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .ledger-col p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      max-width: 62ch;
+    }
+
+    .limit-banner {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid var(--amber);
+      background: var(--amber-tint);
+      font-size: 14px;
+      color: var(--ink);
+      line-height: 1.6;
+    }
+
+    /* Editorial screenshot contact strip (numbered Plates Fig. 01 - Fig. 04) */
+    .plates-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .plate-item {
+      padding: 28px 24px 30px;
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .plate-item:last-child {
+      border-right: 0;
+    }
+
+    .plate-thumb {
+      width: 100%;
+      max-width: 210px;
+      background: var(--ink);
+      border-radius: 20px;
+      padding: 6px;
+      border: 1px solid #0c1013;
+      cursor: zoom-in;
+      display: block;
+    }
+
+    .plate-thumb img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 14px;
+    }
+
+    .plate-meta h3 {
+      margin: 0 0 6px;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .plate-meta p {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* Built-in hardware signatures table */
+    .sig-wrap {
+      padding: 28px 44px 40px;
+    }
+
+    .sig-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      font-size: 14px;
+      background: var(--plate);
+    }
+
+    .sig-table th,
+    .sig-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      text-align: left;
+    }
+
+    .sig-table th {
+      background: var(--bench);
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .sig-table tr:last-child td { border-bottom: 0; }
+    .sig-table th:last-child,
+    .sig-table td:last-child { border-right: 0; }
+
+    /* Footer */
+    .site-foot {
+      padding: 28px 44px;
+      background: var(--ground);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .foot-links {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .foot-links a {
+      text-decoration: none;
+      border-bottom: 1px solid var(--line-strong);
+      color: var(--ink);
+    }
+
+    /* Lightbox modal */
+    dialog.plate-dialog {
+      border: 1px solid var(--ink);
+      padding: 0;
+      background: var(--plate);
+      color: var(--ink);
+      max-width: min(92vw, 460px);
+      width: 100%;
+    }
+
+    dialog.plate-dialog::backdrop {
+      background: rgba(20, 25, 30, 0.72);
+    }
+
+    .dialog-bar {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--ground);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .dialog-close {
+      appearance: none;
+      border: 1px solid var(--ink);
+      background: var(--plate);
+      color: var(--ink);
+      padding: 4px 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .dialog-img {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: var(--ink);
+    }
+
+    @media (max-width: 1040px) {
+      .hero-bench { grid-template-columns: 1fr; }
+      .hero-copy { border-right: 0; border-bottom: 1px solid var(--line); }
+      .mechanism-track,
+      .controls-limits { grid-template-columns: 1fr; }
+      .mech-primary,
+      .ledger-col { border-right: 0; }
+      .plates-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .plate-item { border-bottom: 1px solid var(--line); }
+      .plate-item:nth-child(even) { border-right: 0; }
+      .plate-item:nth-last-child(-n+2) { border-bottom: 0; }
+    }
+
+    @media (max-width: 640px) {
+      .topbar { position: static; }
+      .topbar-inner { padding: 10px 16px; gap: 8px; }
+      .brand { order: 1; }
+      .nav-cluster { display: contents; }
+      .lang-switch { order: 2; }
+      .nav-links { order: 3; width: 100%; gap: 4px 12px; font-size: 13px; border-top: 1px solid var(--line); padding-top: 6px; }
+      .bench-wrap { border-left: 0; border-right: 0; }
+      .hero-copy,
+      .hero-lab,
+      .section-head,
+      .mech-primary,
+      .mech-secondary,
+      .ledger-col,
+      .plate-item,
+      .sig-wrap,
+      .site-foot { padding-left: 18px; padding-right: 18px; }
+      .hero-copy { padding-top: 28px; padding-bottom: 24px; }
+      .hero-copy h1 { max-width: none; font-size: 30px; }
+      .spec-ledger,
+      .spec-ledger tbody,
+      .spec-ledger tr,
+      .spec-ledger th,
+      .spec-ledger td { display: block; width: 100%; }
+      .spec-ledger tr { padding: 10px 0; border-bottom: 1px solid var(--line); }
+      .spec-ledger tr:last-child { border-bottom: 0; }
+      .spec-ledger th,
+      .spec-ledger td { border-bottom: 0; padding: 2px 0; }
+      .ruler-top { flex-wrap: wrap; gap: 8px; }
+      .hero-specimen { grid-template-columns: 1fr; }
+      .plates-grid { grid-template-columns: 1fr; }
+      .plate-item { border-right: 0; border-bottom: 1px solid var(--line); }
+      .plate-item:nth-last-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .plate-item:last-child { border-bottom: 0; }
+      .phone-plate,
+      .plate-thumb { max-width: 240px; }
+      .param-strip { grid-template-columns: 1fr; }
+      .sig-table { display: block; overflow-x: auto; max-width: 100%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html">
+        <svg class="brand-icon" viewBox="0 0 108 108" width="28" height="28" aria-hidden="true">
+          <rect width="108" height="108" fill="#14191e" />
+          <circle cx="54" cy="54" r="44" fill="none" stroke="rgba(245,246,243,0.18)" stroke-width="1.2" />
+          <path d="M43.4,37.4A15,15 0,0 1,64.6 37.4" fill="none" stroke="#6ee7b7" stroke-width="3.2" stroke-linecap="round" />
+          <path d="M47.6,41.6A9,9 0,0 1,60.4 41.6" fill="none" stroke="#a7f3d0" stroke-width="3.2" stroke-linecap="round" />
+          <circle cx="54" cy="44.8" r="2.3" fill="#f5f6f3" />
+          <path fill="#f5f6f3" fill-rule="evenodd" d="M25,50.5C25,49.4 25.9,48.5 27,48.5H48.5C50.2,48.5 51.3,49.8 51.8,51.2C52.6,50.9 55.4,50.9 56.2,51.2C56.7,49.8 57.8,48.5 59.5,48.5H81C82.1,48.5 83,49.4 83,50.5V54.5C83,55.3 82.4,55.9 81.6,56V60.5C81.6,64.9 78,68.5 73.6,68.5H64.4C60,68.5 56.4,64.9 56.4,60.5V56.4C55.7,55.8 54.9,55.5 54,55.5C53.1,55.5 52.3,55.8 51.6,56.4V60.5C51.6,64.9 48,68.5 43.6,68.5H34.4C30,68.5 26.4,64.9 26.4,60.5V56C25.6,55.9 25,55.3 25,54.5V50.5Z M31.5,53C30.4,53 29.5,53.9 29.5,55V60.2C29.5,62.7 31.5,64.8 34,64.8H44C46.5,64.8 48.5,62.7 48.5,60.2V55C48.5,53.9 47.6,53 46.5,53H31.5Z M61.5,53C60.4,53 59.5,53.9 59.5,55V60.2C59.5,62.7 61.5,64.8 64,64.8H74C76.5,64.8 78.5,62.7 78.5,60.2V55C78.5,53.9 77.6,53 76.5,53H61.5Z" />
+          <circle cx="79.3" cy="51.2" r="2.2" fill="#f97316" />
+        </svg>
+        <span data-copy="ko">스마트글래스 스캐너</span>
+        <span data-copy="en">SmartGlass Scanner</span>
+      </a>
+      <div class="nav-cluster">
+        <nav class="nav-links" aria-label="Primary sections">
+          <a href="#mechanism">
+            <span data-copy="ko">동작 원리</span>
+            <span data-copy="en">How it works</span>
+          </a>
+          <a href="#screens">
+            <span data-copy="ko">실제 화면</span>
+            <span data-copy="en">Screens</span>
+          </a>
+          <a href="#signatures">
+            <span data-copy="ko">탐지 시그니처</span>
+            <span data-copy="en">Signatures</span>
+          </a>
+          <a href="privacy.html">
+            <span data-copy="ko">개인정보처리방침</span>
+            <span data-copy="en">Privacy Policy</span>
+          </a>
+        </nav>
+        <div class="lang-switch" role="group" aria-label="Language toggle">
+          <button type="button" class="lang-btn" data-set-lang="ko" aria-pressed="true">KR</button>
+          <button type="button" class="lang-btn" data-set-lang="en" aria-pressed="false">EN</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="bench-wrap">
+    <section class="hero-bench">
+      <div class="hero-copy">
+        <div>
+          <h1>
+            <span data-copy="ko">주변 스마트글래스 BLE 신호를 기기 안에서만 조용히 감지합니다</span>
+            <span data-copy="en">Detect nearby smart-glasses BLE signals strictly on your device</span>
+          </h1>
+          <p class="hero-lead">
+            <span data-copy="ko">
+              Android 12 이상에서 위치 권한을 요구하지 않는 BLE 전용 스캐너입니다.
+              실내 오탐을 줄이는 백그라운드 상시 감시와, 1m(<code>-55 dBm</code>) 이내 초근접 시 무음 진동으로 알리는 입실 스크리닝(Gate Mode)을 함께 제공합니다.
+            </span>
+            <span data-copy="en">
+              A privacy-first Android 8.0+ BLE scanner built without servers, telemetry, or Android 12+ location permissions.
+              Combines smoothed background monitoring with silent 1m (<code>-55 dBm</code>) Gate Screening.
+            </span>
+          </p>
+          <div class="hero-actions">
+            <a class="btn-solid" href="#screens">
+              <span data-copy="ko">실제 앱 화면 4장 보기</span>
+              <span data-copy="en">Inspect 4 App Screens</span>
+            </a>
+            <a class="btn-outline" href="privacy.html">
+              <span data-copy="ko">개인정보처리방침 확인</span>
+              <span data-copy="en">Read Privacy Policy</span>
+            </a>
+          </div>
+        </div>
+
+        <table class="spec-ledger" aria-label="Verification ledger">
+          <tr>
+            <th>
+              <span data-copy="ko">네트워크 전송</span>
+              <span data-copy="en">Data transmission</span>
+            </th>
+            <td>
+              <span class="val">0 B</span>
+              <span data-copy="ko">회원가입·광고·원격 서버 통신 없음 (100% 온디바이스 로컬 처리)</span>
+              <span data-copy="en">No accounts, ads, or remote servers (100% on-device local processing)</span>
+            </td>
+          </tr>
+          <tr>
+            <th>
+              <span data-copy="ko">위치 권한 (API 31+)</span>
+              <span data-copy="en">Location permission</span>
+            </th>
+            <td>
+              <span class="val">NONE</span>
+              <span data-copy="ko">Android 12 이상 <code>neverForLocation</code> 적용 (위치 권한 미요청)</span>
+              <span data-copy="en">Not requested on Android 12+ via <code>neverForLocation</code></span>
+            </td>
+          </tr>
+          <tr>
+            <th>
+              <span data-copy="ko">지원 시그니처</span>
+              <span data-copy="en">Built-in signatures</span>
+            </th>
+            <td>
+              <span class="val">22 Rules</span>
+              <span data-copy="ko">내장 22종 시그니처 + <code>0x0000</code>–<code>0xFFFF</code> 사용자 Hex ID 추가</span>
+              <span data-copy="en">22 built-in rules plus custom <code>0x0000</code>–<code>0xFFFF</code> Hex IDs</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <aside class="hero-lab" aria-label="Interactive Gate signal benchmark">
+        <div class="ruler-panel">
+          <div class="ruler-top">
+            <span>RSSI PROXIMITY BENCH (-90 to -30 dBm)</span>
+            <span id="simBadge" class="ruler-state-badge state-gate">-52 dBm · GATE RED</span>
+          </div>
+
+          <div class="scale-bar" aria-hidden="true">
+            <div class="seg-far"></div>
+            <div class="seg-amber"></div>
+            <div class="seg-gate"></div>
+            <div id="rssiMarker" class="rssi-marker" style="left: 63.33%;"></div>
+          </div>
+
+          <label for="rssiInput" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+            Simulate BLE signal strength in dBm
+          </label>
+          <input
+            id="rssiInput"
+            class="rssi-slider"
+            type="range"
+            min="-90"
+            max="-30"
+            value="-52"
+            step="1"
+          />
+
+          <div class="scale-ticks">
+            <span class="tick-start">-90 dBm (&gt;3m)</span>
+            <span class="tick-gate">-55 dBm Gate</span>
+            <span class="tick-end">-30 dBm (&lt;0.3m)</span>
+          </div>
+
+          <div class="preset-row">
+            <button type="button" class="preset-btn" data-rssi="-76" aria-pressed="false">
+              <span data-copy="ko">원거리 -76 dBm</span>
+              <span data-copy="en">Far -76 dBm</span>
+            </button>
+            <button type="button" class="preset-btn" data-rssi="-58" aria-pressed="false">
+              <span data-copy="ko">접근 -58 dBm</span>
+              <span data-copy="en">Near -58 dBm</span>
+            </button>
+            <button type="button" class="preset-btn" data-rssi="-52" aria-pressed="true">
+              <span data-copy="ko">1m 이내 -52 dBm</span>
+              <span data-copy="en">Gate -52 dBm</span>
+            </button>
+          </div>
+
+          <div id="simReadout" class="sim-readout" aria-live="polite"></div>
+        </div>
+
+        <div class="hero-specimen">
+          <button type="button" class="phone-plate" data-open-plate="0" aria-label="Enlarge main dashboard screenshot">
+            <img
+              src="screenshots/main_dashboard.png"
+              alt="SmartGlass Scanner 메인 대시보드 탐지 화면"
+              width="720"
+              height="1560"
+            />
+          </button>
+          <div class="specimen-notes">
+            <h2>
+              <span data-copy="ko">실시간 근접 레이더 &amp; 즉시 무시</span>
+              <span data-copy="en">Live Proximity &amp; Instant Whitelist</span>
+            </h2>
+            <div class="fig-code">FIG. 01 / MAIN DASHBOARD</div>
+            <p>
+              <span data-copy="ko">
+                스무딩 RSSI와 신뢰도 배지를 한 화면에서 확인하고, 본인·주변 기기는 한 번 눌러 화이트리스트로 제외합니다.
+              </span>
+              <span data-copy="en">
+                Inspect smoothed RSSI and confidence tier on one screen, and silence known personal devices immediately.
+              </span>
+            </p>
+            <button type="button" class="zoom-hint" data-open-plate="0">
+              <span data-copy="ko">전체 크기 보기 +</span>
+              <span data-copy="en">View full screenshot +</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="mechanism" class="section-block">
+      <div class="section-head">
+        <h2>
+          <span data-copy="ko">상황에 맞춘 이중 스캔 구조와 물리적 한계 안내</span>
+          <span data-copy="en">Dual-Mode Scanning Architecture &amp; Honest Limits</span>
+        </h2>
+        <p class="section-sub">
+          <span data-copy="ko">
+            일상 환경에서의 배터리 효율과 시험장·회의실 입실 시의 즉각 판정을 분리해 설계했습니다.
+          </span>
+          <span data-copy="en">
+            Separates power-conscious everyday monitoring from silent 1m doorway screening.
+          </span>
+        </p>
+      </div>
+
+      <div class="mechanism-track">
+        <div class="mech-primary">
+          <h3>
+            <span data-copy="ko">상시 근접 탐지 (Background Guard)</span>
+            <span data-copy="en">Background Guard</span>
+          </h3>
+          <p>
+            <span data-copy="ko">
+              화면이 켜져 있을 때는 균형 모드(<code>BALANCED</code>), 백그라운드 대기 시에는 절전 모드(<code>LOW_POWER</code>)로 자동 전환됩니다.
+              EMA 신호 스무딩, <code>8 dBm</code> 히스테리시스, 신뢰도별 유연 관측 횟수(1~3회)로 실내 오탐과 경계 떨림을 줄입니다.
+            </span>
+            <span data-copy="en">
+              Switches automatically between <code>BALANCED</code> while awake and <code>LOW_POWER</code> in the background.
+              Applies EMA RSSI smoothing, <code>8 dBm</code> release hysteresis, and confidence-based observation counts (1–3 detections) to suppress indoor flicker.
+            </span>
+          </p>
+          <dl class="param-strip">
+            <div class="param-cell">
+              <dt>SCAN PRESETS</dt>
+              <dd>BALANCED / LOW_POWER</dd>
+            </div>
+            <div class="param-cell">
+              <dt>HYSTERESIS</dt>
+              <dd>8 dBm</dd>
+            </div>
+            <div class="param-cell">
+              <dt>OBSERVATIONS</dt>
+              <dd>1–3 DETECTIONS</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="mech-secondary">
+          <h3>
+            <span data-copy="ko">입실 스크리닝 (Gate Mode)</span>
+            <span data-copy="en">Gate Screening Mode</span>
+          </h3>
+          <p>
+            <span data-copy="ko">
+              약 0.5~1m(<code>-55 dBm</code>) 초근접 거리에서 1~2초 내 빠르게 판별하는 포그라운드 전용 모드입니다. 정숙한 환경을 위해 소리 대신 진동으로 알립니다.
+            </span>
+            <span data-copy="en">
+              Foreground high-frequency mode tuned for ~0.5–1m (<code>-55 dBm</code>) screening within 1–2 seconds using silent vibration cues.
+            </span>
+          </p>
+          <div class="gate-states">
+            <div class="gate-row">
+              <div class="gate-tag state-far">GREEN</div>
+              <div class="gate-desc">
+                <span data-copy="ko">임계값 미만 · 통과 상태</span>
+                <span data-copy="en">Below threshold · Clear to pass</span>
+              </div>
+            </div>
+            <div class="gate-row">
+              <div class="gate-tag state-near">AMBER</div>
+              <div class="gate-desc">
+                <span data-copy="ko">근접 신호 상승 · 접근 주의</span>
+                <span data-copy="en">Rising signal · Approaching range</span>
+              </div>
+            </div>
+            <div class="gate-row">
+              <div class="gate-tag state-gate">RED</div>
+              <div class="gate-desc">
+                <span data-copy="ko">-55 dBm 이상 · 무음 진동 경보</span>
+                <span data-copy="en">&ge; -55 dBm · Silent haptic alert</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-limits">
+        <div class="ledger-col">
+          <h3>
+            <span data-copy="ko">커스텀 Hex ID, 화이트리스트 및 로컬 로그</span>
+            <span data-copy="en">Custom Hex IDs, Whitelist &amp; Local Export</span>
+          </h3>
+          <p>
+            <span data-copy="ko">
+              기본 시그니처 외에 사용자가 직접 16-bit Hex 제조사 ID(<code>0x0000</code>~<code>0xFFFF</code>)를 등록할 수 있습니다.
+              본인이나 주변 상용 기기는 화이트리스트에 추가해 알림에서 즉시 제외하며, 기기 내부에 로컬 보관되는 최근 탐지·관측 로그(최대 500건, 재시작 후 유지)는 원할 때만 <code>.txt</code> 파일로 내보낼 수 있습니다.
+            </span>
+            <span data-copy="en">
+              Register custom 16-bit Hex Bluetooth Company IDs (<code>0x0000</code>–<code>0xFFFF</code>), whitelist your own devices to prevent repeated alerts, and optionally export up to 500 locally stored detections and observations (persisted on-device across restarts) to a <code>.txt</code> file via Android Storage Access Framework.
+            </span>
+          </p>
+        </div>
+
+        <div class="ledger-col">
+          <h3>
+            <span data-copy="ko">투명한 온디바이스 프라이버시와 미탐지 한계</span>
+            <span data-copy="en">On-Device Privacy &amp; Physical Detection Limits</span>
+          </h3>
+          <p>
+            <span data-copy="ko">
+              상단 고정 알림의 ‘중지’ 버튼으로 언제든 스캔을 즉시 끝낼 수 있으며, 설정에서 화이트리스트·로그를 곧바로 지울 수 있습니다.
+            </span>
+            <span data-copy="en">
+              Stop background scanning at any moment directly from the persistent notification's Stop action, or clear local logs and DataStore entries in Settings.
+            </span>
+          </p>
+          <div class="limit-banner">
+            <span data-copy="ko">
+              <strong>탐지 한계 및 검증 범위 고지:</strong> 본 앱은 주변 BLE 광고 패킷 감지만 수행하며, 실제 녹화·촬영 여부나 착용자를 단정하지 않습니다. 내장 시그니처는 공개 자료 및 BLE 비콘 테스트를 바탕으로 구성되어 <strong>시중 모든 실물 스마트글래스 기기에서 일일이 테스트되지는 않았으며</strong>, <strong>이미 스마트폰과 연결(페어링)되어 BLE 광고를 중단한 기기</strong>나 펌웨어 차이로 패킷이 다른 기기는 탐지되지 않을 수 있으므로 보안 검사 시 육안 확인과 병행하는 것을 권장합니다.
+            </span>
+            <span data-copy="en">
+              <strong>Detection boundary &amp; testing scope notice:</strong> This app detects nearby BLE advertisements only and cannot verify active video/photo recording or identify the wearer. Built-in rules are derived from public specifications and BLE beacon tests—<strong>not every commercial smart-glasses hardware unit has been individually tested in person</strong>. Devices with firmware variations or devices <strong>already paired with a smartphone that stop broadcasting BLE advertisements</strong> may not appear; always pair with visual inspection for security checks.
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screens" class="section-block">
+      <div class="section-head">
+        <h2>
+          <span data-copy="ko">실제 앱 화면 4종</span>
+          <span data-copy="en">Captured Android Screens</span>
+        </h2>
+        <p class="section-sub">
+          <span data-copy="ko">실제 기기에서 동작하는 포그라운드·상태바 알림·Gate 경보·설정 화면입니다. 클릭하면 원본 해상도로 확인할 수 있습니다.</span>
+          <span data-copy="en">Real device captures from live scans, status-bar notifications, Gate alerts, and settings. Click any plate to enlarge.</span>
+        </p>
+      </div>
+
+      <div class="plates-grid">
+        <article class="plate-item">
+          <button type="button" class="plate-thumb" data-open-plate="0" aria-label="Open Fig. 01 Main Dashboard">
+            <img src="screenshots/main_dashboard.png" alt="SmartGlass Scanner 메인 대시보드 탐지 화면" loading="lazy" width="720" height="1560" />
+          </button>
+          <div class="plate-meta">
+            <h3>
+              <span data-copy="ko">상시 근접 탐지 대시보드</span>
+              <span data-copy="en">Main Proximity Dashboard</span>
+            </h3>
+            <div class="fig-code">FIG. 01 / DASHBOARD</div>
+            <p>
+              <span data-copy="ko">포그라운드 균형 모드 스캔, 신뢰도 배지, 스무딩 RSSI, 원터치 무시 및 페어링 한계 안내를 표시합니다.</span>
+              <span data-copy="en">Shows active scan tier, confidence badges, EMA-smoothed RSSI, one-tap whitelisting, and pairing boundary notes.</span>
+            </p>
+            <button type="button" class="zoom-hint" data-open-plate="0">
+              <span data-copy="ko">확대 보기 +</span>
+              <span data-copy="en">Inspect Fig. 01 +</span>
+            </button>
+          </div>
+        </article>
+
+        <article class="plate-item">
+          <button type="button" class="plate-thumb" data-open-plate="1" aria-label="Open Fig. 02 Notification Alert">
+            <img src="screenshots/notification_alert.png" alt="SmartGlass Scanner 상단 상태바 아이콘 및 노티바 감지 알림 화면" loading="lazy" width="720" height="1560" />
+          </button>
+          <div class="plate-meta">
+            <h3>
+              <span data-copy="ko">상태바 아이콘 및 감지 알림</span>
+              <span data-copy="en">Notification &amp; Foreground Stop</span>
+            </h3>
+            <div class="fig-code">FIG. 02 / STATUS BAR</div>
+            <p>
+              <span data-copy="ko">상단바 스캔 아이콘으로 동작 상태를 알리고, 근접 시 [유력] 알림 카드와 즉시 중지 버튼을 제공합니다.</span>
+              <span data-copy="en">Displays the dedicated status-bar indicator with likely-match proximity alerts and a direct Stop action.</span>
+            </p>
+            <button type="button" class="zoom-hint" data-open-plate="1">
+              <span data-copy="ko">확대 보기 +</span>
+              <span data-copy="en">Inspect Fig. 02 +</span>
+            </button>
+          </div>
+        </article>
+
+        <article class="plate-item">
+          <button type="button" class="plate-thumb" data-open-plate="2" aria-label="Open Fig. 03 Gate Alert">
+            <img src="screenshots/gate_alert.png" alt="SmartGlass Scanner 시험장 입실 스크리닝 경보 화면" loading="lazy" width="720" height="1560" />
+          </button>
+          <div class="plate-meta">
+            <h3>
+              <span data-copy="ko">시험장 입실 스크리닝 (ALERT)</span>
+              <span data-copy="en">Gate Screening Alert</span>
+            </h3>
+            <div class="fig-code">FIG. 03 / GATE ALERT</div>
+            <p>
+              <span data-copy="ko">1m 이내(-55 dBm) 판정 시 전체 화면 색상 전환과 무음 진동으로 경고하고 다음 확인용 초기화 버튼을 제공합니다.</span>
+              <span data-copy="en">Triggers full-screen color feedback and silent haptic alerts within 1m (-55 dBm), with instant next-check reset.</span>
+            </p>
+            <button type="button" class="zoom-hint" data-open-plate="2">
+              <span data-copy="ko">확대 보기 +</span>
+              <span data-copy="en">Inspect Fig. 03 +</span>
+            </button>
+          </div>
+        </article>
+
+        <article class="plate-item">
+          <button type="button" class="plate-thumb" data-open-plate="3" aria-label="Open Fig. 04 Settings and Signatures">
+            <img src="screenshots/settings.png" alt="SmartGlass Scanner 설정 및 시그니처 관리 화면" loading="lazy" width="720" height="1560" />
+          </button>
+          <div class="plate-meta">
+            <h3>
+              <span data-copy="ko">설정 및 시그니처 관리</span>
+              <span data-copy="en">Settings &amp; Signatures</span>
+            </h3>
+            <div class="fig-code">FIG. 04 / SETTINGS</div>
+            <p>
+              <span data-copy="ko">RSSI 임계값·쿨다운을 조정하고, 커스텀 16-bit Hex Company ID·내장 DB·<code>.txt</code> 로그 내보내기를 제어합니다.</span>
+              <span data-copy="en">Adjust RSSI thresholds and cooldowns, inspect bundled rules, add Hex IDs, and export local <code>.txt</code> logs.</span>
+            </p>
+            <button type="button" class="zoom-hint" data-open-plate="3">
+              <span data-copy="ko">확대 보기 +</span>
+              <span data-copy="en">Inspect Fig. 04 +</span>
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="signatures" class="section-block">
+      <div class="section-head">
+        <h2>
+          <span data-copy="ko">기본 내장 탐지 시그니처</span>
+          <span data-copy="en">Bundled BLE Hardware Signatures</span>
+        </h2>
+        <p class="section-sub">
+          <span data-copy="ko">앱 내장 데이터베이스에 기본 포함된 스마트글래스 제조사 ID 및 서비스 UUID 목록입니다.</span>
+          <span data-copy="en">Pre-loaded manufacturer Company IDs and service UUID patterns used during passive scans.</span>
+        </p>
+      </div>
+
+      <div class="sig-wrap">
+        <table class="sig-table">
+          <thead>
+            <tr>
+              <th>
+                <span data-copy="ko">제품 / 제조사</span>
+                <span data-copy="en">Device / Vendor</span>
+              </th>
+              <th>
+                <span data-copy="ko">식별 기준</span>
+                <span data-copy="en">Identifier</span>
+              </th>
+              <th>
+                <span data-copy="ko">매칭 방식</span>
+                <span data-copy="en">Match Scope</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Ray-Ban Meta</td>
+              <td><code>0x058E</code></td>
+              <td>
+                <span data-copy="ko">제조사 ID + 광고 페이로드 패턴</span>
+                <span data-copy="en">Company ID + Payload signature</span>
+              </td>
+            </tr>
+            <tr>
+              <td>Luxottica Frame</td>
+              <td><code>0x0D53</code></td>
+              <td>
+                <span data-copy="ko">제조사 Company ID</span>
+                <span data-copy="en">Manufacturer Company ID</span>
+              </td>
+            </tr>
+            <tr>
+              <td>Snap Spectacles</td>
+              <td><code>0x03C2</code></td>
+              <td>
+                <span data-copy="ko">제조사 Company ID</span>
+                <span data-copy="en">Manufacturer Company ID</span>
+              </td>
+            </tr>
+            <tr>
+              <td>TCL / RayNeo</td>
+              <td><code>0x0BC6</code></td>
+              <td>
+                <span data-copy="ko">제조사 Company ID</span>
+                <span data-copy="en">Manufacturer Company ID</span>
+              </td>
+            </tr>
+            <tr>
+              <td>Meizu MYVU</td>
+              <td><code>0x03AB</code></td>
+              <td>
+                <span data-copy="ko">제조사 Company ID</span>
+                <span data-copy="en">Manufacturer Company ID</span>
+              </td>
+            </tr>
+            <tr>
+              <td>HeyCyan SDK</td>
+              <td><code>Service UUID</code> / <code>HeyCyan-*</code></td>
+              <td>
+                <span data-copy="ko">GATT 서비스 UUID 및 기기명 접두사</span>
+                <span data-copy="en">Advertised Service UUID &amp; device name prefix</span>
+              </td>
+            </tr>
+            <tr>
+              <td>Rokid AI Glasses</td>
+              <td><code>0x9100</code> (Service UUID)</td>
+              <td>
+                <span data-copy="ko">공식 CXR-M SDK 서비스 UUID</span>
+                <span data-copy="en">Official CXR-M SDK Service UUID</span>
+              </td>
+            </tr>
+            <tr>
+              <td>Da Echo</td>
+              <td><code>0xFEA8</code> + Service Data</td>
+              <td>
+                <span data-copy="ko">서비스 UUID + 서비스 데이터 바이트 패턴</span>
+                <span data-copy="en">Service UUID + Service Data byte signature</span>
+              </td>
+            </tr>
+            <tr>
+              <td>Even Realities / Vuzix / Kopin / North</td>
+              <td><code>0x10F9</code>, <code>0x060C</code>, <code>0x041F</code>, <code>0x0562</code></td>
+              <td>
+                <span data-copy="ko">전용 스마트글래스 제조사 Company ID</span>
+                <span data-copy="en">Dedicated smart-eyewear Company IDs</span>
+              </td>
+            </tr>
+            <tr>
+              <td>Meta BLE Service</td>
+              <td><code>0xFD5F</code> (Service UUID)</td>
+              <td>
+                <span data-copy="ko">Meta 광고 서비스 UUID (2회 관측 확정)</span>
+                <span data-copy="en">Meta Service UUID (2-hit confirmed)</span>
+              </td>
+            </tr>
+            <tr>
+              <td>Monocle / AirGo / INMO / XREAL 등</td>
+              <td><code>Monocle*</code>, <code>AirGo</code>, <code>Even G*</code>, <code>INMO*</code> 등</td>
+              <td>
+                <span data-copy="ko">주요 스마트글래스 기기명 접두사·패턴</span>
+                <span data-copy="en">Device name prefixes &amp; keyword patterns</span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span data-copy="ko">Meta / Jieli 공용 ID</span>
+                <span data-copy="en">Meta / Jieli Shared IDs</span>
+              </td>
+              <td><code>0x01AB</code>, <code>0x05D6</code></td>
+              <td>
+                <span data-copy="ko">공용 칩셋·제조사 Company ID</span>
+                <span data-copy="en">Shared chipset / Company IDs</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="sig-footnote" style="margin-top: 12px; font-size: 0.875rem; color: var(--muted);">
+          <span data-copy="ko">※ 위 시그니처는 공개 Bluetooth SIG/SDK 문서 및 테스트 비콘을 기준으로 작성되었으며, 모든 실물 제조사·모델 기기에서 개별 테스트가 완료된 목록은 아닙니다.</span>
+          <span data-copy="en">※ Signatures above are compiled from public Bluetooth SIG/SDK documentation and BLE beacon testing; not every physical retail model has been individually verified on hardware.</span>
+        </p>
+      </div>
+    </section>
+
+    <footer class="site-foot">
+      <div>
+        <strong>SmartGlass Scanner</strong> · <code>com.windyflow.smartglassscanner</code>
+      </div>
+      <div class="foot-links">
+        <a href="privacy.html">
+          <span data-copy="ko">개인정보처리방침</span>
+          <span data-copy="en">Privacy Policy</span>
+        </a>
+        <a href="privacy.html#en">Privacy Policy (EN)</a>
+        <a href="mailto:yusu.kang@gmail.com">yusu.kang@gmail.com</a>
+      </div>
+    </footer>
+  </main>
+
+  <dialog id="plateDialog" class="plate-dialog" aria-labelledby="dialogTitle">
+    <div class="dialog-bar">
+      <span id="dialogTitle">FIG. 01</span>
+      <button type="button" class="dialog-close" id="dialogClose">CLOSE [ESC]</button>
+    </div>
+    <img id="dialogImg" class="dialog-img" src="screenshots/main_dashboard.png" alt="SmartGlass Scanner screenshot preview" />
+  </dialog>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var langBtns = document.querySelectorAll('[data-set-lang]');
+      var slider = document.getElementById('rssiInput');
+      var marker = document.getElementById('rssiMarker');
+      var badge = document.getElementById('simBadge');
+      var readout = document.getElementById('simReadout');
+      var presetBtns = document.querySelectorAll('.preset-btn');
+
+      var plates = [
+        { src: 'screenshots/main_dashboard.png', label: 'FIG. 01 / MAIN DASHBOARD' },
+        { src: 'screenshots/notification_alert.png', label: 'FIG. 02 / STATUS BAR & NOTIFICATION' },
+        { src: 'screenshots/gate_alert.png', label: 'FIG. 03 / GATE SCREENING ALERT' },
+        { src: 'screenshots/settings.png', label: 'FIG. 04 / SETTINGS & SIGNATURES' }
+      ];
+
+      function currentLang() {
+        return root.getAttribute('data-lang') === 'en' ? 'en' : 'ko';
+      }
+
+      function renderSim(val) {
+        var rssi = Number(val);
+        var pct = ((rssi - (-90)) / ((-30) - (-90))) * 100;
+        marker.style.left = Math.max(0, Math.min(100, pct)) + '%';
+
+        var lang = currentLang();
+        badge.classList.remove('state-far', 'state-near', 'state-gate');
+
+        if (rssi >= -55) {
+          badge.classList.add('state-gate');
+          badge.textContent = rssi + ' dBm · GATE RED';
+          readout.textContent = lang === 'ko'
+            ? 'Gate 임계치(-55 dBm) 이상 — 약 1m 이내 초근접 상태입니다. 무음 진동과 적색 전체 화면 경고가 작동합니다.'
+            : 'At or above -55 dBm Gate threshold (~1m). Triggers silent haptic vibration and full-screen Red alert.';
+        } else if (rssi >= -60) {
+          badge.classList.add('state-near');
+          badge.textContent = rssi + ' dBm · AMBER';
+          readout.textContent = lang === 'ko'
+            ? 'Gate 경계 접근(-60 ~ -56 dBm) — EMA 스무딩으로 신호 변동 폭을 거르며 8 dBm 히스테리시스 범위에서 추적합니다.'
+            : 'Approaching Gate range (-60 to -56 dBm). Smoothed via EMA filtering with 8 dBm hysteresis stability.';
+        } else {
+          badge.classList.add('state-far');
+          badge.textContent = rssi + ' dBm · GUARD';
+          readout.textContent = lang === 'ko'
+            ? '원거리 Background Guard(-90 ~ -61 dBm) — 설정된 연속 관측 횟수(1~3회)를 채우면 상단 알림으로 알립니다.'
+            : 'Background Guard range (-90 to -61 dBm). Fires a proximity notification after 1–3 consistent detections.';
+        }
+
+        presetBtns.forEach(function (btn) {
+          btn.setAttribute('aria-pressed', Number(btn.getAttribute('data-rssi')) === rssi ? 'true' : 'false');
+        });
+      }
+
+      function setLang(lang) {
+        var next = lang === 'en' ? 'en' : 'ko';
+        root.setAttribute('data-lang', next);
+        root.setAttribute('lang', next);
+        langBtns.forEach(function (btn) {
+          btn.setAttribute('aria-pressed', btn.getAttribute('data-set-lang') === next ? 'true' : 'false');
+        });
+        renderSim(slider.value);
+      }
+
+      langBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          setLang(btn.getAttribute('data-set-lang'));
+        });
+      });
+
+      slider.addEventListener('input', function () {
+        renderSim(slider.value);
+      });
+
+      presetBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          slider.value = btn.getAttribute('data-rssi');
+          renderSim(slider.value);
+        });
+      });
+
+      var dialog = document.getElementById('plateDialog');
+      var dialogImg = document.getElementById('dialogImg');
+      var dialogTitle = document.getElementById('dialogTitle');
+      var dialogClose = document.getElementById('dialogClose');
+
+      document.querySelectorAll('[data-open-plate]').forEach(function (trigger) {
+        trigger.addEventListener('click', function () {
+          var item = plates[Number(trigger.getAttribute('data-open-plate'))];
+          if (!item) return;
+          dialogTitle.textContent = item.label;
+          dialogImg.src = item.src;
+          dialogImg.alt = item.label;
+          dialog.showModal();
+        });
+      });
+
+      dialogClose.addEventListener('click', function () {
+        dialog.close();
+      });
+
+      dialog.addEventListener('click', function (e) {
+        if (e.target === dialog) dialog.close();
+      });
+
+      var initialLang = window.location.hash === '#en' || window.location.search.indexOf('lang=en') !== -1 ? 'en' : 'ko';
+      setLang(initialLang);
+    })();
+  </script>
+</body>
+</html>
